@@ -120,7 +120,7 @@
     <div class="search-card">
         <div class="input-group">
             <label>رقم الجلوس</label>
-            <!-- oninput هنا تمنع إدخال الحروف وتقبل الأرقام فقط -->
+            <!-- الحماية الأولى: منع الحروف وقبول الأرقام فقط -->
             <input type="text" id="seatInput" placeholder="ادخل رقم الجلوس" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
 
@@ -182,7 +182,7 @@
                 return;
             }
 
-            // ===== [ شرط الحماية الجديد: التأكد من أن رقم الجلوس يتكون من 7 أرقام ] =====
+            // ===== [ الحماية الثانية: التأكد من أن رقم الجلوس يتكون من 7 أرقام ] =====
             if (seatVal !== "" && seatVal.length !== 7) {
                 resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: تأكد من إدخال رقم الجلوس بشكل صحيح (يجب أن يتكون من 7 أرقام فقط).</div>`;
                 return;
@@ -222,6 +222,7 @@
                 header: true,         
                 skipEmptyLines: true,
                 worker: true, // === [ الأداة السحرية لمنع تجمد المتصفح أثناء قراءة الملف الضخم ] ===
+                transformHeader: function(header) { return header.trim(); }, // تنظيف أسماء الأعمدة لضمان التطابق مع الإكسيل
                 complete: function(results) {
                     if (requestTimedOut) return;
                     clearTimeout(timer); 
