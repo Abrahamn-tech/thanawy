@@ -5,15 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نتيجة الثانوية العامة 2026</title>
     
-    <!-- استدعاء الخطوط العربية الحديثة والأيقونات -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- استدعاء مكتبة PapaParse لقراءة ملف الإكسل (CSV) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
     <style>
-        /* الألوان الأساسية للموقع */
         :root {
             --primary-blue: #1e3a8a; 
             --btn-blue: #2563eb;     
@@ -83,8 +79,8 @@
 
         @media print {
             body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; }
+            #resultsContainer, #resultsContainer * { visibility: visible; }
+            #resultsContainer { position: absolute; left: 0; top: 0; width: 100%; }
             .btn-print { display: none !important; }
             .search-card, .header-section, .bottom-ad-banner { display: none; } 
         }
@@ -130,7 +126,6 @@
 
     <div class="bottom-ad-banner" id="adContainer">
         <button class="close-ad-btn" onclick="closeAd()" title="إغلاق الإعلان">×</button>
-        <!-- مساحة الإعلان -->
     </div>
 
     <script>
@@ -170,19 +165,88 @@
         function fetchDataAndSearch(searchSeat, searchName, searchSection) {
             let resultsContainer = document.getElementById("resultsContainer");
             
+            let requestTimedOut = false;
+            let timer = setTimeout(() => {
+                requestTimedOut = true;
+                document.getElementById("btnText").style.display = "inline";
+                document.getElementById("loadingSpinner").style.display = "none";
+                document.getElementById("searchBtn").disabled = false;
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> مهلة الاتصال انتهت. تأكد من أن ملف data.csv موجود.</div>`;
+            }, 6000);
+
+            // تعديل هام: قراءة الملف كمصفوفات (Arrays) بدلاً من كائنات (Objects) لتخطي مشكلة العناوين الوهمية
             Papa.parse("data.csv", {
                 download: true,
-                header: true,
+                header: false, // تم تغييرها إلى false
                 worker: true, 
                 complete: function(results) {
-                    cachedStudentData = results.data;
+                    if (requestTimedOut) return;
+                    clearTimeout(timer);
+                    
+                    let rawData = results.data;
+                    let headersIndex = -1;
+                    let colMap = { name: -1, seat: -1, school: -1, status: -1, score: -1, section: -1 };
+
+                    // 1. خوارزمية البحث الذكي عن العناوين في أول 15 صف
+                    for (let i = 0; i < Math.min(15, rawData.length); i++) {
+                        let row = rawData[i];
+                        
+                        // البحث عن الأعمدة الأساسية
+                        let nameCol = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("الاسم"));
+                        let seatCol = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("جلوس"));
+
+                        // إذا وجدنا "الاسم" و "رقم الجلوس" في نفس الصف، إذن هذا هو صف العناوين الحقيقي!
+                        if (nameCol !== -1 && seatCol !== -1) {
+                            headersIndex = i;
+                            colMap.name = nameCol;
+                            colMap.seat = seatCol;
+                            
+                            // تحديد أماكن باقي الأعمدة إن وجدت
+                            colMap.school = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("المدرس"));
+                            colMap.status = row.findIndex(cell => typeof cell === 'string' && (cell.trim() === "حالة" || cell.trim() === "الحالة"));
+                            colMap.score = row.findIndex(cell => typeof cell === 'string' && (cell.trim().includes("مجمو") || cell.trim().includes("النتيجة")));
+                            colMap.section = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("شعبة"));
+                            break;
+                        }
+                    }
+
+                    // إذا لم يتم العثور على عناوين صحيحة في الملف
+                    if (headersIndex === -1) {
+                        document.getElementById("btnText").style.display = "inline";
+                        document.getElementById("loadingSpinner").style.display = "none";
+                        document.getElementById("searchBtn").disabled = false;
+                        resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ في هيكل الملف: لم يتم العثور على أعمدة (الاسم) و (رقم الجلوس) داخل ملف CSV.</div>`;
+                        return;
+                    }
+
+                    // 2. إعادة صياغة البيانات لتصبح نظيفة وجاهزة للبحث متجاهلين الصفوف التي تسبق العناوين
+                    let cleanData = [];
+                    for (let i = headersIndex + 1; i < rawData.length; i++) {
+                        let row = rawData[i];
+                        
+                        // تجاهل الصفوف الفارغة تماماً
+                        if (!row[colMap.name] && !row[colMap.seat]) continue;
+
+                        cleanData.push({
+                            "الاسم": colMap.name !== -1 ? row[colMap.name] : "",
+                            "رقم الجلوس": colMap.seat !== -1 ? row[colMap.seat] : "",
+                            "المدرسة": colMap.school !== -1 ? row[colMap.school] : "",
+                            "حالة": colMap.status !== -1 ? row[colMap.status] : "",
+                            "مجمو": colMap.score !== -1 ? row[colMap.score] : "",
+                            "الشعبة": colMap.section !== -1 ? row[colMap.section] : ""
+                        });
+                    }
+
+                    cachedStudentData = cleanData;
                     performFiltering(cachedStudentData, searchSeat, searchName, searchSection);
                 },
-                error: function() {
+                error: function(err) {
+                    if (requestTimedOut) return;
+                    clearTimeout(timer);
                     document.getElementById("btnText").style.display = "inline";
                     document.getElementById("loadingSpinner").style.display = "none";
                     document.getElementById("searchBtn").disabled = false;
-                    resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> حدث خطأ في الاتصال. يرجى التأكد من رفع ملف data.csv وتسميته بشكل صحيح.</div>`;
+                    resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر تحميل ملف البيانات (data.csv). تأكد من صحة اسم الملف على الموقع.</div>`;
                 }
             });
         }
@@ -192,13 +256,10 @@
 
             for (let i = 0; i < data.length; i++) {
                 let row = data[i];
-                if (!row["الاسم"] && !row["رقم الجلوس"]) continue;
-
                 let isMatch = true;
+                
                 if (searchSeat && String(row["رقم الجلوس"]).trim() !== searchSeat) isMatch = false;
                 if (searchName && !String(row["الاسم"]).toLowerCase().includes(searchName)) isMatch = false;
-                
-                // تم تعديل هذا السطر برمجياً ليتجاهل فلتر الشعبة إذا كان الملف لا يحتوي على عمود الشعبة
                 if (searchSection && row["الشعبة"] && String(row["الشعبة"]).trim() !== searchSection) isMatch = false;
 
                 if (isMatch) foundResults.push(row);
@@ -216,7 +277,7 @@
             resultsContainer.innerHTML = "";
 
             if (results.length === 0) {
-                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة. يرجى المراجعة.</div>`;
+                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات. تأكد من رقم الجلوس أو صحة اسم الطالب.</div>`;
                 return;
             }
 
@@ -225,7 +286,7 @@
 
             results.forEach(row => {
                 let cardHTML = `
-                    <div class="result-card" id="print-area">
+                    <div class="result-card">
                         <div class="watermark">وثيقة رسمية</div>
                         <div class="result-content">
                             <div class="result-header">
@@ -252,8 +313,7 @@
                             </div>
                             <div class="final-score">
                                 <span class="result-label" style="color: var(--primary-blue); font-size: 18px;">المجموع الكلي:</span>
-                                <!-- تم برمجة هذا السطر ليقرأ عمود مجمو من ملف الإعدادية أو النتيجة من ملف الثانوية -->
-                                <span class="score-value">${row["مجمو"] || row["النتيجة"] || "---"}</span>
+                                <span class="score-value">${row["مجمو"] || "---"}</span>
                             </div>
                             <div class="issue-date">
                                 تم استخراج هذه النتيجة إلكترونياً بتاريخ: ${dateString}
