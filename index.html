@@ -57,6 +57,10 @@
         .loader { display: none; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* تنسيق لوحة الاستشعار (الرادار) للتحقق من قراءة البيانات */
+        #debugSensor { display: none; background-color: #0f172a; color: #10b981; width: 100%; max-width: 650px; margin-top: 20px; padding: 15px; border-radius: 12px; font-family: monospace; font-size: 13px; text-align: left; direction: ltr; overflow-x: auto; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        .debug-title { color: #fbbf24; font-weight: bold; margin-bottom: 10px; text-align: center; direction: rtl;}
+
         #resultsContainer { margin-top: 30px; width: 100%; max-width: 650px; }
         .result-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 16px; padding: 30px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; animation: fadeIn 0.5s ease; text-align: right; }
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80px; color: rgba(30, 58, 138, 0.03); white-space: nowrap; pointer-events: none; z-index: 0; }
@@ -73,16 +77,12 @@
         .btn-print:hover { background-color: #334155; }
         .error-msg { color: #dc2626; background: #fef2f2; padding: 15px; border-radius: 12px; font-weight: bold; text-align: center; width: 100%; max-width: 500px; margin-top: 20px; }
 
-        .bottom-ad-banner { position: fixed; bottom: 0; left: 0; width: 100%; background-color: #ffffff; box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.08); padding: 10px; z-index: 1000; display: flex; justify-content: center; align-items: center; min-height: 70px; }
-        .close-ad-btn { position: absolute; top: -12px; right: 15px; background-color: #ef4444; color: white; border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.2s; z-index: 1001; }
-        .close-ad-btn:hover { background-color: #dc2626; transform: scale(1.1); }
-
         @media print {
             body * { visibility: hidden; }
             #resultsContainer, #resultsContainer * { visibility: visible; }
             #resultsContainer { position: absolute; left: 0; top: 0; width: 100%; }
-            .btn-print { display: none !important; }
-            .search-card, .header-section, .bottom-ad-banner { display: none; } 
+            .btn-print, #debugSensor { display: none !important; }
+            .search-card, .header-section { display: none; } 
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -122,21 +122,26 @@
         </button>
     </div>
 
-    <div id="resultsContainer"></div>
-
-    <div class="bottom-ad-banner" id="adContainer">
-        <button class="close-ad-btn" onclick="closeAd()" title="إغلاق الإعلان">×</button>
+    <!-- لوحة الاستشعار للتحليل -->
+    <div id="debugSensor">
+        <div class="debug-title"><i class="fa-solid fa-satellite-dish"></i> لوحة استشعار البيانات (تعمل الآن)</div>
+        <div id="debugLog"></div>
     </div>
 
-    <script>
-        function closeAd() {
-            document.getElementById("adContainer").style.display = "none";
-        }
+    <div id="resultsContainer"></div>
 
+    <script>
         document.getElementById("seatInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
         document.getElementById("nameInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
 
         let cachedStudentData = null;
+
+        // دالة لكتابة تقارير الاستشعار
+        function addLog(message) {
+            let logDiv = document.getElementById("debugLog");
+            logDiv.innerHTML += `> ${message}<br>`;
+            console.log(message);
+        }
 
         function startSearch() {
             let seatVal = document.getElementById("seatInput").value.trim();
@@ -145,8 +150,14 @@
             let sectionVal = sectionElement ? sectionElement.value : "";
             let resultsContainer = document.getElementById("resultsContainer");
             
+            // تفعيل وتفريغ لوحة الاستشعار
+            document.getElementById("debugSensor").style.display = "block";
+            document.getElementById("debugLog").innerHTML = "";
+            addLog("بدء عملية البحث...");
+            
             if (seatVal === "" && nameVal === "") {
                 resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-circle-exclamation"></i> الرجاء إدخال رقم الجلوس أو الاسم للبحث.</div>`;
+                addLog("خطأ: لم يتم إدخال بيانات للبحث.");
                 return;
             }
 
@@ -156,6 +167,7 @@
             resultsContainer.innerHTML = "";
 
             if (cachedStudentData) {
+                addLog("تم إيجاد البيانات مسبقاً في الذاكرة. جاري التصفية...");
                 performFiltering(cachedStudentData, seatVal, nameVal, sectionVal);
             } else {
                 fetchDataAndSearch(seatVal, nameVal, sectionVal);
@@ -165,66 +177,75 @@
         function fetchDataAndSearch(searchSeat, searchName, searchSection) {
             let resultsContainer = document.getElementById("resultsContainer");
             
+            // 1. كسر الكاش: إضافة رقم عشوائي (الوقت) للرابط لضمان سحب أحدث ملف من سيرفرات GitHub
+            let cacheBuster = new Date().getTime();
+            let fileUrl = "data.csv?v=" + cacheBuster;
+            
+            addLog(`جاري طلب الملف: ${fileUrl}`);
+            addLog("نظراً لحجم الملف (حوالي 2 ميجا)، قد يستغرق التحميل بضع ثوانٍ...");
+
             let requestTimedOut = false;
+            // 2. تم رفع المهلة إلى 25 ثانية بدلاً من 6 ثوانٍ
             let timer = setTimeout(() => {
                 requestTimedOut = true;
+                addLog("❌ فشل: انتهت مهلة الـ 25 ثانية ولم يتمكن المتصفح من تنزيل الملف.");
                 document.getElementById("btnText").style.display = "inline";
                 document.getElementById("loadingSpinner").style.display = "none";
                 document.getElementById("searchBtn").disabled = false;
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> مهلة الاتصال انتهت. تأكد من أن ملف data.csv موجود.</div>`;
-            }, 6000);
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> مهلة الاتصال انتهت (25 ثانية). تأكد من جودة الإنترنت وأن ملف data.csv موجود فعلاً.</div>`;
+            }, 25000);
 
-            // تعديل هام: قراءة الملف كمصفوفات (Arrays) بدلاً من كائنات (Objects) لتخطي مشكلة العناوين الوهمية
-            Papa.parse("data.csv", {
+            Papa.parse(fileUrl, {
                 download: true,
-                header: false, // تم تغييرها إلى false
+                header: false,
                 worker: true, 
                 complete: function(results) {
                     if (requestTimedOut) return;
                     clearTimeout(timer);
                     
                     let rawData = results.data;
+                    addLog(`✅ تم تحميل الملف بنجاح! إجمالي عدد الصفوف المقروءة: ${rawData.length}`);
+                    
+                    if(rawData.length > 2) {
+                        addLog(`محتوى السطر الثاني (يجب أن يكون العناوين): [${rawData[1].join(" | ")}]`);
+                        addLog(`محتوى السطر الثالث (أول طالب): [${rawData[2].join(" | ")}]`);
+                    }
+
                     let headersIndex = -1;
                     let colMap = { name: -1, seat: -1, school: -1, status: -1, score: -1, section: -1 };
 
-                    // 1. خوارزمية البحث الذكي عن العناوين في أول 15 صف
                     for (let i = 0; i < Math.min(15, rawData.length); i++) {
                         let row = rawData[i];
-                        
-                        // البحث عن الأعمدة الأساسية
                         let nameCol = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("الاسم"));
                         let seatCol = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("جلوس"));
 
-                        // إذا وجدنا "الاسم" و "رقم الجلوس" في نفس الصف، إذن هذا هو صف العناوين الحقيقي!
                         if (nameCol !== -1 && seatCol !== -1) {
                             headersIndex = i;
                             colMap.name = nameCol;
                             colMap.seat = seatCol;
-                            
-                            // تحديد أماكن باقي الأعمدة إن وجدت
                             colMap.school = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("المدرس"));
                             colMap.status = row.findIndex(cell => typeof cell === 'string' && (cell.trim() === "حالة" || cell.trim() === "الحالة"));
                             colMap.score = row.findIndex(cell => typeof cell === 'string' && (cell.trim().includes("مجمو") || cell.trim().includes("النتيجة")));
                             colMap.section = row.findIndex(cell => typeof cell === 'string' && cell.trim().includes("شعبة"));
+                            
+                            addLog(`تم التعرف على الأعمدة بنجاح في السطر رقم ${i+1}.`);
+                            addLog(`مؤشرات الأعمدة: الاسم(${colMap.name})، الجلوس(${colMap.seat})، المجموع(${colMap.score})، الشعبة(${colMap.section})`);
                             break;
                         }
                     }
 
-                    // إذا لم يتم العثور على عناوين صحيحة في الملف
                     if (headersIndex === -1) {
+                        addLog("❌ خطأ: لم يتعرف الكود على عمود 'الاسم' أو 'رقم الجلوس'.");
                         document.getElementById("btnText").style.display = "inline";
                         document.getElementById("loadingSpinner").style.display = "none";
                         document.getElementById("searchBtn").disabled = false;
-                        resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ في هيكل الملف: لم يتم العثور على أعمدة (الاسم) و (رقم الجلوس) داخل ملف CSV.</div>`;
+                        resultsContainer.innerHTML = `<div class="error-msg">خطأ في هيكل الملف: لم يتم العثور على أعمدة (الاسم) و (رقم الجلوس).</div>`;
                         return;
                     }
 
-                    // 2. إعادة صياغة البيانات لتصبح نظيفة وجاهزة للبحث متجاهلين الصفوف التي تسبق العناوين
                     let cleanData = [];
                     for (let i = headersIndex + 1; i < rawData.length; i++) {
                         let row = rawData[i];
-                        
-                        // تجاهل الصفوف الفارغة تماماً
                         if (!row[colMap.name] && !row[colMap.seat]) continue;
 
                         cleanData.push({
@@ -233,26 +254,30 @@
                             "المدرسة": colMap.school !== -1 ? row[colMap.school] : "",
                             "حالة": colMap.status !== -1 ? row[colMap.status] : "",
                             "مجمو": colMap.score !== -1 ? row[colMap.score] : "",
-                            "الشعبة": colMap.section !== -1 ? row[colMap.section] : ""
+                            "الشعبة": colMap.section !== -1 ? row[colMap.section] : "",
+                            "_hasSectionColumn": colMap.section !== -1 // إضافة علامة لمعرفة ما إذا كان الملف يحتوي على عمود شعبة أصلاً
                         });
                     }
 
                     cachedStudentData = cleanData;
+                    addLog(`تمت تهيئة ${cleanData.length} سجل بنجاح. جاري البحث الآن...`);
                     performFiltering(cachedStudentData, searchSeat, searchName, searchSection);
                 },
                 error: function(err) {
                     if (requestTimedOut) return;
                     clearTimeout(timer);
+                    addLog(`❌ فشل الاتصال بالملف. الخطأ: ${err}`);
                     document.getElementById("btnText").style.display = "inline";
                     document.getElementById("loadingSpinner").style.display = "none";
                     document.getElementById("searchBtn").disabled = false;
-                    resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر تحميل ملف البيانات (data.csv). تأكد من صحة اسم الملف على الموقع.</div>`;
+                    resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر تحميل ملف البيانات (data.csv). تأكد من صحة الرابط.</div>`;
                 }
             });
         }
 
         function performFiltering(data, searchSeat, searchName, searchSection) {
             let foundResults = [];
+            addLog(`معايير البحث المطلوبة - الجلوس: [${searchSeat}] | الاسم: [${searchName}] | الشعبة: [${searchSection}]`);
 
             for (let i = 0; i < data.length; i++) {
                 let row = data[i];
@@ -260,10 +285,16 @@
                 
                 if (searchSeat && String(row["رقم الجلوس"]).trim() !== searchSeat) isMatch = false;
                 if (searchName && !String(row["الاسم"]).toLowerCase().includes(searchName)) isMatch = false;
-                if (searchSection && row["الشعبة"] && String(row["الشعبة"]).trim() !== searchSection) isMatch = false;
+                
+                // 3. الذكاء في فلترة الشعبة: لن يتم استبعاد الطالب إلا إذا كان ملف الإكسيل يحتوي فعلاً على عمود الشعبة
+                if (searchSection && row._hasSectionColumn && String(row["الشعبة"]).trim() !== searchSection) {
+                    isMatch = false;
+                }
 
                 if (isMatch) foundResults.push(row);
             }
+
+            addLog(`تم العثور على ${foundResults.length} نتيجة مطابقة.`);
 
             document.getElementById("btnText").style.display = "inline";
             document.getElementById("loadingSpinner").style.display = "none";
@@ -277,7 +308,7 @@
             resultsContainer.innerHTML = "";
 
             if (results.length === 0) {
-                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات. تأكد من رقم الجلوس أو صحة اسم الطالب.</div>`;
+                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات.</div>`;
                 return;
             }
 
