@@ -146,7 +146,7 @@
 
     <script>
         /* =========================================
-           القسم البرمجي (JavaScript)
+           القسم البرمجي (JavaScript) - نظام البث المباشر
            ========================================= */
 
         // 1. دالة إغلاق الإعلان
@@ -167,10 +167,14 @@
                        .trim();
         }
 
-        // متغير لتخزين بيانات ملف الإكسيل في ذاكرة المتصفح لمنع التحميل المتكرر
-        let cachedStudentData = null; 
+        // 4. دالة إعادة ضبط زر البحث
+        function resetSearchButton() {
+            document.getElementById("btnText").style.display = "inline";
+            document.getElementById("loadingSpinner").style.display = "none";
+            document.getElementById("searchBtn").disabled = false;
+        }
 
-        // 4. الدالة الرئيسية التي تبدأ العمل عند الضغط على زر "بحث"
+        // 5. الدالة الرئيسية التي تبدأ العمل عند الضغط على زر "بحث"
         function startSearch() {
             let seatVal = document.getElementById("seatInput").value.trim();
             let nameVal = normalizeArabic(document.getElementById("nameInput").value); 
@@ -182,9 +186,9 @@
                 return;
             }
 
-            // ===== [ الحماية الثانية: التأكد من أن رقم الجلوس يتكون من 7 أرقام ] =====
+            // ===== [ شرط الحماية الصارم: التأكد من أن رقم الجلوس يتكون من 7 أرقام بالضبط ] =====
             if (seatVal !== "" && seatVal.length !== 7) {
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: تأكد من إدخال رقم الجلوس بشكل صحيح (يجب أن يتكون من 7 أرقام فقط).</div>`;
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: أرقام الجلوس تتكون من 7 أرقام فقط. الرجاء مراجعة الرقم المدخل.</div>`;
                 return;
             }
             // ==============================================================================
@@ -195,79 +199,80 @@
             document.getElementById("searchBtn").disabled = true;
             resultsContainer.innerHTML = "";
 
-            if (cachedStudentData) {
-                performFiltering(cachedStudentData, seatVal, nameVal);
-            } else {
-                fetchDataAndSearch(seatVal, nameVal);
-            }
+            // استدعاء دالة البحث بالبث المباشر
+            fetchDataAndSearchStream(seatVal, nameVal);
         }
 
-        // 5. دالة جلب وقراءة الملف
-        function fetchDataAndSearch(searchSeat, searchName) {
+        // 6. العقل البرمجي الجديد (البحث بتقنية البث المباشر سطرًا بسطر)
+        function fetchDataAndSearchStream(searchSeat, searchName) {
             let resultsContainer = document.getElementById("resultsContainer");
             let fileUrl = "data.csv?v=" + new Date().getTime(); 
+            let foundResults = [];
 
-            // تم رفع المؤقت إلى 60 ثانية لحماية المتصفح أثناء قراءة الملف الضخم
+            // مؤقت زمني لضمان عدم تعليق المتصفح (مرفوع لـ 60 ثانية)
             let requestTimedOut = false;
             let timer = setTimeout(() => {
                 requestTimedOut = true;
-                document.getElementById("btnText").style.display = "inline";
-                document.getElementById("loadingSpinner").style.display = "none";
-                document.getElementById("searchBtn").disabled = false;
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-clock"></i> مهلة الاتصال انتهت نظراً لحجم البيانات. يرجى المحاولة مرة أخرى أو التأكد من استقرار الإنترنت.</div>`;
+                resetSearchButton();
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-clock"></i> مهلة الاتصال انتهت نظراً لضعف الإنترنت. يرجى المحاولة مرة أخرى.</div>`;
             }, 60000); 
 
             Papa.parse(fileUrl, {
                 download: true,       
                 header: true,         
                 skipEmptyLines: true,
-                worker: true, // === [ الأداة السحرية لمنع تجمد المتصفح أثناء قراءة الملف الضخم ] ===
-                transformHeader: function(header) { return header.trim(); }, // تنظيف أسماء الأعمدة لضمان التطابق مع الإكسيل
-                complete: function(results) {
+                worker: true, // استخدام معالج خلفي لمنع تجميد الشاشة
+                transformHeader: function(header) { return header.trim(); }, // تنظيف العناوين
+                
+                // === [ تقنية الـ Step: تقرأ الملف سطراً بسطر ولا تستهلك الذاكرة ] ===
+                step: function(results, parser) {
+                    if (requestTimedOut) {
+                        parser.abort(); // إيقاف القراءة إذا انتهى الوقت
+                        return;
+                    }
+
+                    let row = results.data;
+                    if (!row || !row["seating_no"]) return; // تخطي الصفوف المعطوبة
+
+                    let isMatch = true;
+                    
+                    // مطابقة رقم الجلوس
+                    if (searchSeat && String(row["seating_no"]).trim() !== searchSeat) {
+                        isMatch = false;
+                    }
+                    
+                    // مطابقة الاسم
+                    if (searchName) {
+                        let csvName = normalizeArabic(String(row["arabic_name"]));
+                        if (!csvName.includes(searchName)) {
+                            isMatch = false;
+                        }
+                    }
+
+                    // إذا وجدنا تطابقاً
+                    if (isMatch) {
+                        foundResults.push(row);
+                        
+                        // السرعة الصاروخية: إذا كان البحث برقم الجلوس فقط ووجدناه، نوقف البحث فوراً!
+                        if (searchSeat && !searchName) {
+                            parser.abort(); // أمر إيقاف قراءة باقي الملف المليء بالبيانات
+                        }
+                    }
+                },
+                complete: function() {
+                    // بعد الانتهاء من فحص الملف (أو بعد الإيقاف المبكر)
                     if (requestTimedOut) return;
                     clearTimeout(timer); 
-                    
-                    cachedStudentData = results.data; 
-                    performFiltering(cachedStudentData, searchSeat, searchName); 
+                    resetSearchButton();
+                    displayResults(foundResults); 
                 },
                 error: function(err) {
                     if (requestTimedOut) return;
                     clearTimeout(timer);
-                    document.getElementById("btnText").style.display = "inline";
-                    document.getElementById("loadingSpinner").style.display = "none";
-                    document.getElementById("searchBtn").disabled = false;
+                    resetSearchButton();
                     resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر تحميل ملف البيانات (data.csv). تأكد من جودة الاتصال.</div>`;
                 }
             });
-        }
-
-        // 6. دالة البحث والتصفية
-        function performFiltering(data, searchSeat, searchName) {
-            let foundResults = [];
-
-            for (let i = 0; i < data.length; i++) {
-                let row = data[i];
-                let isMatch = true;
-                
-                // مطابقة رقم الجلوس
-                if (searchSeat && String(row["seating_no"]).trim() !== searchSeat) {
-                    isMatch = false;
-                }
-                
-                // مطابقة الاسم
-                let csvName = normalizeArabic(String(row["arabic_name"]));
-                if (searchName && !csvName.includes(searchName)) {
-                    isMatch = false;
-                }
-
-                if (isMatch) foundResults.push(row);
-            }
-
-            document.getElementById("btnText").style.display = "inline";
-            document.getElementById("loadingSpinner").style.display = "none";
-            document.getElementById("searchBtn").disabled = false;
-            
-            displayResults(foundResults);
         }
 
         // 7. دالة عرض النتيجة
