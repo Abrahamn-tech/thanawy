@@ -18,11 +18,11 @@
            1. المتغيرات والألوان الأساسية للموقع
            ========================================= */
         :root {
-            --primary-blue: #1e3a8a; 
-            --btn-blue: #2563eb;     
-            --bg-body: #f8fafc;      
-            --border-color: #e2e8f0; 
-            --text-gray: #64748b;    
+            --primary-blue: #1e3a8a; /* الأزرق الداكن للعناوين */
+            --btn-blue: #2563eb;     /* الأزرق الفاتح للأزرار */
+            --bg-body: #f8fafc;      /* لون خلفية الموقع */
+            --border-color: #e2e8f0; /* لون الحدود */
+            --text-gray: #64748b;    /* لون النصوص الرمادية */
         }
 
         /* تصفير الهوامش وتطبيق الخط على جميع العناصر */
@@ -70,9 +70,11 @@
         /* =========================================
            4. تأثيرات التحميل وعرض النتائج
            ========================================= */
+        /* تصميم دائرة التحميل (اللودنج) */
         .loader { display: none; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* حاوية النتائج وبطاقة الطالب */
         #resultsContainer { margin-top: 30px; width: 100%; max-width: 650px; }
         .result-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 16px; padding: 30px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; animation: fadeIn 0.5s ease; text-align: right; }
         
@@ -106,7 +108,7 @@
         .close-ad-btn { position: absolute; top: -12px; right: 15px; background-color: #ef4444; color: white; border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: 0.2s; z-index: 1001; }
         .close-ad-btn:hover { background-color: #dc2626; transform: scale(1.1); }
 
-        /* تعليمات الطابعة: إخفاء كل شيء وطباعة النتيجة فقط */
+        /* تعليمات الطابعة: إخفاء كل شيء باستثناء النتيجة */
         @media print {
             body * { visibility: hidden; }
             #resultsContainer, #resultsContainer * { visibility: visible; }
@@ -130,7 +132,7 @@
     <div class="search-card">
         <div class="input-group">
             <label>رقم الجلوس</label>
-            <!-- ⚠️ إصلاح هندسي: تم إضافة oninput لمنع إدخال الحروف وقبول الأرقام فقط -->
+            <!-- oninput لمنع إدخال الحروف وقبول الأرقام فقط -->
             <input type="text" id="seatInput" placeholder="ادخل رقم الجلوس" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
 
@@ -151,7 +153,7 @@
     <!-- الإعلان السفلي -->
     <div class="bottom-ad-banner" id="adContainer">
         <button class="close-ad-btn" onclick="closeAd()" title="إغلاق الإعلان">×</button>
-        <!-- يمكنك وضع كود جوجل أدسنس أو أي إعلان هنا -->
+        <!-- ضع كود الإعلان الخاص بك هنا -->
     </div>
 
     <script>
@@ -168,7 +170,7 @@
         document.getElementById("seatInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
         document.getElementById("nameInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
 
-        // ⚠️ إصلاح هندسي: دالة لتوحيد شكل الحروف العربية لضمان دقة البحث (تحويل الهمزات والتاء المربوطة)
+        // 3. دالة توحيد شكل الحروف العربية لضمان دقة البحث (تحويل الهمزات والتاء المربوطة)
         function normalizeArabic(text) {
             if (!text) return "";
             return text.replace(/[أإآا]/g, 'ا')
@@ -180,7 +182,7 @@
         // متغير لتخزين بيانات ملف الإكسيل في ذاكرة المتصفح لمنع التحميل المتكرر
         let cachedStudentData = null; 
 
-        // 3. الدالة الرئيسية التي تبدأ العمل عند الضغط على زر "بحث"
+        // 4. الدالة الرئيسية التي تبدأ العمل عند الضغط على زر "بحث"
         function startSearch() {
             let seatVal = document.getElementById("seatInput").value.trim();
             // توحيد الاسم المدخل من المستخدم
@@ -199,6 +201,7 @@
             document.getElementById("searchBtn").disabled = true;
             resultsContainer.innerHTML = "";
 
+            // شرط ذكي: إذا تم تحميل الملف سابقاً، ابحث مباشرة. إذا كانت أول مرة، قم بتحميله.
             if (cachedStudentData) {
                 performFiltering(cachedStudentData, seatVal, nameVal);
             } else {
@@ -206,20 +209,22 @@
             }
         }
 
-        // 4. دالة جلب وقراءة ملف البيانات (CSV)
+        // 5. دالة جلب وقراءة ملف البيانات الوحيد (CSV) مع مؤقت 30 ثانية
         function fetchDataAndSearch(searchSeat, searchName) {
             let resultsContainer = document.getElementById("resultsContainer");
+            
+            // إضافة رقم متغير للرابط لكسر "الكاش" وضمان قراءة أحدث نسخة من ملفك
             let fileUrl = "data.csv?v=" + new Date().getTime(); 
 
-            // ⚠️ إصلاح هندسي: إعادة نظام الحماية (مؤقت 15 ثانية) لحل مشكلة التعليق لو الإنترنت ضعيف
+            // نظام الحماية: مؤقت 30 ثانية لحل مشكلة التعليق لو الإنترنت ضعيف مع الملفات الكبيرة
             let requestTimedOut = false;
             let timer = setTimeout(() => {
                 requestTimedOut = true;
                 document.getElementById("btnText").style.display = "inline";
                 document.getElementById("loadingSpinner").style.display = "none";
                 document.getElementById("searchBtn").disabled = false;
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> مهلة الاتصال انتهت. تأكد من جودة الإنترنت وأن الملف موجود.</div>`;
-            }, 15000); // 15 ثانية كافية جداً لملف من 3 أعمدة
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> مهلة الاتصال انتهت. تأكد من جودة الإنترنت وأن ملف data.csv موجود.</div>`;
+            }, 30000); // 30 ثانية 
 
             Papa.parse(fileUrl, {
                 download: true,       
@@ -244,7 +249,7 @@
             });
         }
 
-        // 5. دالة البحث والتصفية
+        // 6. دالة البحث والتصفية
         function performFiltering(data, searchSeat, searchName) {
             let foundResults = [];
 
@@ -257,7 +262,7 @@
                     isMatch = false;
                 }
                 
-                // ⚠️ إصلاح هندسي: تطبيق توحيد الحروف على اسم الطالب الموجود في الإكسيل قبل البحث فيه
+                // تطبيق توحيد الحروف على اسم الطالب الموجود في الإكسيل قبل البحث فيه
                 let csvName = normalizeArabic(String(row["arabic_name"]));
                 if (searchName && !csvName.includes(searchName)) {
                     isMatch = false;
@@ -273,7 +278,7 @@
             displayResults(foundResults);
         }
 
-        // 6. دالة عرض النتيجة ورسم البطاقة
+        // 7. دالة عرض النتيجة ورسم البطاقة
         function displayResults(results) {
             let resultsContainer = document.getElementById("resultsContainer");
             resultsContainer.innerHTML = "";
@@ -306,6 +311,12 @@
                             <div class="result-item">
                                 <span class="result-label">رقم الجلوس:</span>
                                 <span class="result-value">${row["seating_no"] || "---"}</span>
+                            </div>
+
+                            <!-- تمت إضافة خانة حالة الطالب بناءً على بيانات ملفك الأخير -->
+                            <div class="result-item">
+                                <span class="result-label">حالة الطالب:</span>
+                                <span class="result-value">${row["student_case_desc"] || "---"}</span>
                             </div>
                             
                             <div class="final-score">
