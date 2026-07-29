@@ -7,7 +7,8 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         :root {
@@ -40,6 +41,7 @@
         .search-card { background-color: #ffffff; width: 100%; max-width: 500px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04); padding: 30px; }
         .input-group { margin-bottom: 25px; text-align: right; }
         .input-group label { display: block; margin-bottom: 10px; font-weight: 600; color: #334155; font-size: 15px; }
+        
         input[type="text"] { width: 100%; padding: 15px 20px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 15px; transition: all 0.3s; outline: none; background-color: #fff; }
         input[type="text"]:focus { border-color: var(--btn-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
 
@@ -50,17 +52,10 @@
         .loader { display: none; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        #loadingStatus { display: none; text-align: center; color: var(--btn-blue); font-weight: bold; margin-top: 15px; font-size: 14px; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
-
-        /* تنسيق العداد الحي الذي طلبته لكي تراه بعينك */
-        #liveCounter { display: none; text-align: center; color: #10b981; font-weight: bold; margin-top: 10px; font-size: 16px; font-family: monospace; background: #e2e8f0; padding: 10px; border-radius: 8px;}
-
         #resultsContainer { margin-top: 30px; width: 100%; max-width: 650px; }
         .result-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 16px; padding: 30px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; animation: fadeIn 0.5s ease; text-align: right; }
         
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80px; color: rgba(30, 58, 138, 0.03); white-space: nowrap; pointer-events: none; z-index: 0; }
-        
         .result-content { position: relative; z-index: 1; }
         .result-header { font-size: 20px; font-weight: 700; color: var(--primary-blue); border-bottom: 2px solid #edf2f7; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
         .result-item { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 16px; border-bottom: 1px dashed #edf2f7; padding-bottom: 8px;}
@@ -85,7 +80,7 @@
             #resultsContainer, #resultsContainer * { visibility: visible; }
             #resultsContainer { position: absolute; left: 0; top: 0; width: 100%; }
             .btn-print { display: none !important; }
-            .search-card, .header-section, .bottom-ad-banner, #liveCounter { display: none; } 
+            .search-card, .header-section, .bottom-ad-banner { display: none; } 
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -93,15 +88,15 @@
 <body>
 
     <div class="header-section">
-        <div class="badge"><span class="dot"></span> النظام التجريبي لاستخراج النتائج</div>
+        <div class="badge"><span class="dot"></span> النظام الفائق لاستخراج النتائج</div>
         <h1>استعلم عن نتيجتك الآن</h1>
-        <p>أدخل بياناتك لعرض النتيجة</p>
+        <p>أدخل بياناتك لعرض النتيجة الفورية</p>
     </div>
 
     <div class="search-card">
         <div class="input-group">
             <label>رقم الجلوس</label>
-            <input type="text" id="seatInput" placeholder="ادخل رقم الجلوس" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+            <input type="text" id="seatInput" placeholder="ادخل رقم الجلوس (7 أرقام)" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
 
         <div class="input-group">
@@ -113,10 +108,6 @@
             <span id="btnText">بحث واستخراج</span>
             <div class="loader" id="loadingSpinner"></div>
         </button>
-        
-        <div id="loadingStatus">يتم الآن تجهيز قاعدة البيانات لأول مرة (قد يستغرق بعض الوقت حسب سرعة الإنترنت)...</div>
-        
-        <div id="liveCounter"><i class="fa-solid fa-microchip"></i> جاري قراءة البيانات: <span id="counterValue">0</span> سجل</div>
     </div>
 
     <div id="resultsContainer"></div>
@@ -126,21 +117,25 @@
     </div>
 
     <script>
-        function closeAd() { document.getElementById("adContainer").style.display = "none"; }
+        function closeAd() {
+            document.getElementById("adContainer").style.display = "none";
+        }
+
+        // ======================================================================
+        // ⚠️ رابط مشروعك جاهز، فقط ضع مفتاح Anon Key الخاص بك مكان السطر السفلي
+        // ======================================================================
+        const SUPABASE_URL = "https://evxptmcvchmryixihxtw.supabase.co";
+        const SUPABASE_ANON_KEY = "https://ejjhrllpocfxwfnnwtat.supabase.co/rest/v1/thanawy-results"; 
+
+        // تهيئة الاتصال بقاعدة البيانات السحابية
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         document.getElementById("seatInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
         document.getElementById("nameInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
 
-        function normalizeArabic(text) {
-            if (!text) return "";
-            return text.replace(/[أإآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').trim();
-        }
-
-        let cachedStudentData = null; 
-
-        function startSearch() {
+        async function startSearch() {
             let seatVal = document.getElementById("seatInput").value.trim();
-            let nameVal = normalizeArabic(document.getElementById("nameInput").value); 
+            let nameVal = document.getElementById("nameInput").value.trim();
             let resultsContainer = document.getElementById("resultsContainer");
             
             if (seatVal === "" && nameVal === "") {
@@ -148,115 +143,53 @@
                 return;
             }
 
+            // شرط الـ 7 أرقام الصارم
             if (seatVal !== "" && seatVal.length !== 7) {
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: أرقام الجلوس تتكون من 7 أرقام فقط. الرجاء مراجعة الرقم المدخل.</div>`;
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: رقم الجلوس يجب أن يتكون من 7 أرقام فقط.</div>`;
                 return;
             }
 
+            // تفعيل التحميل
             document.getElementById("btnText").style.display = "none";
             document.getElementById("loadingSpinner").style.display = "block";
             document.getElementById("searchBtn").disabled = true;
-            document.getElementById("liveCounter").style.display = "none"; // إخفاء العداد في البداية
             resultsContainer.innerHTML = "";
 
-            if (cachedStudentData) {
-                performFilteringAsync(cachedStudentData, seatVal, nameVal);
-            } else {
-                document.getElementById("loadingStatus").style.display = "block";
-                fetchDataAndSearch(seatVal, nameVal);
+            try {
+                // استعلام من جدول results
+                let query = _supabase.from('results').select('*');
+
+                if (seatVal) {
+                    query = query.eq('seating_no', seatVal);
+                } else if (nameVal) {
+                    query = query.ilike('arabic_name', `%${nameVal}%`).limit(20);
+                }
+
+                const { data, error } = await query;
+
+                if (error) {
+                    console.error("Supabase Error:", error);
+                    throw error;
+                }
+
+                displayResults(data);
+
+            } catch (err) {
+                console.error("Fetch Error:", err);
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر الاتصال بقاعدة البيانات. تأكد من وضع مفتاح ANON KEY الصحيح والتأكد من إعدادات الجدول.</div>`;
+            } finally {
+                document.getElementById("btnText").style.display = "inline";
+                document.getElementById("loadingSpinner").style.display = "none";
+                document.getElementById("searchBtn").disabled = false;
             }
-        }
-
-        function fetchDataAndSearch(searchSeat, searchName) {
-            let resultsContainer = document.getElementById("resultsContainer");
-            let fileUrl = "data.csv?v=" + new Date().getTime(); 
-
-            Papa.parse(fileUrl, {
-                download: true,       
-                header: true,         
-                skipEmptyLines: true,
-                worker: true, 
-                transformHeader: function(header) { return header.trim(); },
-                
-                complete: function(results) {
-                    cachedStudentData = results.data; 
-                    document.getElementById("loadingStatus").style.display = "none";
-                    performFilteringAsync(cachedStudentData, searchSeat, searchName); 
-                },
-                error: function(err) {
-                    document.getElementById("loadingStatus").style.display = "none";
-                    document.getElementById("btnText").style.display = "inline";
-                    document.getElementById("loadingSpinner").style.display = "none";
-                    document.getElementById("searchBtn").disabled = false;
-                    resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر تحميل ملف البيانات. تأكد من استقرار الإنترنت أو وجود الملف.</div>`;
-                }
-            });
-        }
-
-        // هندسة عبقرية: دالة بحث "غير متزامنة" لكي تتيح للشاشة إظهار العداد الحي بدون تجميد
-        function performFilteringAsync(data, searchSeat, searchName) {
-            let foundResults = [];
-            let i = 0;
-            let counterElement = document.getElementById("counterValue");
-            
-            // إظهار العداد
-            document.getElementById("liveCounter").style.display = "block";
-
-            // تقسيم عملية البحث إلى دفعات (Chunks) لكي نرى العداد وهو يتحرك
-            function searchChunk() {
-                let chunkSize = 5000; // يفحص 5000 اسم في اللحظة لكي تراه عينك
-                let end = Math.min(i + chunkSize, data.length);
-
-                for (; i < end; i++) {
-                    let row = data[i];
-                    let isMatch = true;
-                    
-                    if (searchSeat && String(row["seating_no"]).trim() !== searchSeat) {
-                        isMatch = false;
-                    }
-                    
-                    if (searchName) {
-                        let csvName = normalizeArabic(String(row["arabic_name"]));
-                        if (!csvName.includes(searchName)) {
-                            isMatch = false;
-                        }
-                    }
-
-                    if (isMatch) {
-                        foundResults.push(row);
-                        if (searchSeat && !searchName) {
-                            i = data.length; // إيقاف البحث إذا وجدنا رقم الجلوس
-                            break;
-                        }
-                    }
-                }
-
-                // تحديث العداد الحي على الشاشة
-                counterElement.innerText = i.toLocaleString();
-
-                if (i < data.length) {
-                    // أمر للمتصفح بالتقاط أنفاسه وتحديث الشاشة ثم إكمال الدفعة التالية
-                    requestAnimationFrame(searchChunk);
-                } else {
-                    // الانتهاء من البحث
-                    document.getElementById("liveCounter").style.display = "none";
-                    document.getElementById("btnText").style.display = "inline";
-                    document.getElementById("loadingSpinner").style.display = "none";
-                    document.getElementById("searchBtn").disabled = false;
-                    displayResults(foundResults);
-                }
-            }
-
-            // بدء عملية البحث بالدفعات
-            requestAnimationFrame(searchChunk);
         }
 
         function displayResults(results) {
             let resultsContainer = document.getElementById("resultsContainer");
             resultsContainer.innerHTML = "";
 
-            if (results.length === 0) {
-                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات. يرجى التأكد من الرقم المدخل.</div>`;
+            if (!results || results.length === 0) {
+                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات. يرجى التأكد من الرقم أو الاسم.</div>`;
                 return;
             }
 
