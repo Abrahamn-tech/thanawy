@@ -117,17 +117,14 @@
     </div>
 
     <script>
-        function closeAd() {
-            document.getElementById("adContainer").style.display = "none";
-        }
+        function closeAd() { document.getElementById("adContainer").style.display = "none"; }
 
-        // ======================================================================
-        // ⚠️ رابط مشروعك جاهز، فقط ضع مفتاح Anon Key الخاص بك مكان السطر السفلي
-        // ======================================================================
+        // =========================================
+        // ⚠️ لا تنسَ وضع المفتاح الخاص بك هنا مرة أخرى
+        // =========================================
         const SUPABASE_URL = "https://evxptmcvchmryixihxtw.supabase.co";
         const SUPABASE_ANON_KEY = "https://ejjhrllpocfxwfnnwtat.supabase.co/rest/v1/thanawy-results"; 
 
-        // تهيئة الاتصال بقاعدة البيانات السحابية
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         document.getElementById("seatInput").addEventListener("keypress", function(e) { if (e.key === "Enter") startSearch(); });
@@ -143,24 +140,24 @@
                 return;
             }
 
-            // شرط الـ 7 أرقام الصارم
             if (seatVal !== "" && seatVal.length !== 7) {
                 resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: رقم الجلوس يجب أن يتكون من 7 أرقام فقط.</div>`;
                 return;
             }
 
-            // تفعيل التحميل
             document.getElementById("btnText").style.display = "none";
             document.getElementById("loadingSpinner").style.display = "block";
             document.getElementById("searchBtn").disabled = true;
             resultsContainer.innerHTML = "";
 
             try {
-                // استعلام من جدول results
                 let query = _supabase.from('results').select('*');
 
                 if (seatVal) {
-                    query = query.eq('seating_no', seatVal);
+                    // ⚠️ تعديل هندسي: تحويل رقم الجلوس لرقم (Number) لتجنب مشكلة تطابق الأنواع في Supabase
+                    let seatNumber = Number(seatVal); 
+                    // استخدام or للبحث سواء كان العمود مخزناً كنص أو رقم في القاعدة
+                    query = query.or(`seating_no.eq.${seatNumber},seating_no.eq.${seatVal}`);
                 } else if (nameVal) {
                     query = query.ilike('arabic_name', `%${nameVal}%`).limit(20);
                 }
@@ -168,15 +165,15 @@
                 const { data, error } = await query;
 
                 if (error) {
-                    console.error("Supabase Error:", error);
+                    console.error("تفاصيل خطأ Supabase:", error);
                     throw error;
                 }
 
                 displayResults(data);
 
             } catch (err) {
-                console.error("Fetch Error:", err);
-                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر الاتصال بقاعدة البيانات. تأكد من وضع مفتاح ANON KEY الصحيح والتأكد من إعدادات الجدول.</div>`;
+                console.error("خطأ عام:", err);
+                resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-wifi"></i> تعذر الاتصال بقاعدة البيانات. (تأكد من إعدادات الـ RLS في Supabase).</div>`;
             } finally {
                 document.getElementById("btnText").style.display = "inline";
                 document.getElementById("loadingSpinner").style.display = "none";
@@ -189,7 +186,7 @@
             resultsContainer.innerHTML = "";
 
             if (!results || results.length === 0) {
-                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات. يرجى التأكد من الرقم أو الاسم.</div>`;
+                resultsContainer.innerHTML = `<div class="error-msg" style="background:#fffbeb; color:#b45309;"><i class="fa-solid fa-magnifying-glass"></i> لا توجد نتائج مطابقة لهذه البيانات.</div>`;
                 return;
             }
 
