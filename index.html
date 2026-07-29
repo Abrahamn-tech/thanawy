@@ -7,7 +7,6 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- مكتبة سحب الإكسيل بأقصى استقرار -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 
     <style>
@@ -51,9 +50,11 @@
         .loader { display: none; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* رسالة تفاعلية لطمأنة المستخدم أثناء التحميل الطويل */
         #loadingStatus { display: none; text-align: center; color: var(--btn-blue); font-weight: bold; margin-top: 15px; font-size: 14px; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+        /* تنسيق العداد الحي الذي طلبته لكي تراه بعينك */
+        #liveCounter { display: none; text-align: center; color: #10b981; font-weight: bold; margin-top: 10px; font-size: 16px; font-family: monospace; background: #e2e8f0; padding: 10px; border-radius: 8px;}
 
         #resultsContainer { margin-top: 30px; width: 100%; max-width: 650px; }
         .result-card { background: #fff; border: 2px solid #e2e8f0; border-radius: 16px; padding: 30px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); position: relative; overflow: hidden; animation: fadeIn 0.5s ease; text-align: right; }
@@ -84,7 +85,7 @@
             #resultsContainer, #resultsContainer * { visibility: visible; }
             #resultsContainer { position: absolute; left: 0; top: 0; width: 100%; }
             .btn-print { display: none !important; }
-            .search-card, .header-section, .bottom-ad-banner { display: none; } 
+            .search-card, .header-section, .bottom-ad-banner, #liveCounter { display: none; } 
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -100,7 +101,6 @@
     <div class="search-card">
         <div class="input-group">
             <label>رقم الجلوس</label>
-            <!-- المنع الصارم للحروف: لا يقبل إلا الأرقام -->
             <input type="text" id="seatInput" placeholder="ادخل رقم الجلوس" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
 
@@ -114,15 +114,15 @@
             <div class="loader" id="loadingSpinner"></div>
         </button>
         
-        <!-- رسالة الطمأنة الجديدة -->
         <div id="loadingStatus">يتم الآن تجهيز قاعدة البيانات لأول مرة (قد يستغرق بعض الوقت حسب سرعة الإنترنت)...</div>
+        
+        <div id="liveCounter"><i class="fa-solid fa-microchip"></i> جاري قراءة البيانات: <span id="counterValue">0</span> سجل</div>
     </div>
 
     <div id="resultsContainer"></div>
 
     <div class="bottom-ad-banner" id="adContainer">
         <button class="close-ad-btn" onclick="closeAd()" title="إغلاق الإعلان">×</button>
-        <!-- إعلان -->
     </div>
 
     <script>
@@ -136,7 +136,6 @@
             return text.replace(/[أإآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').trim();
         }
 
-        // المخزن الأبدي: لكي نحمل الـ 40 ميجا مرة واحدة فقط ولا نرهق المستخدم في كل بحث
         let cachedStudentData = null; 
 
         function startSearch() {
@@ -149,7 +148,6 @@
                 return;
             }
 
-            // [ الحماية الصارمة لرقم الجلوس: 7 أرقام فقط ]
             if (seatVal !== "" && seatVal.length !== 7) {
                 resultsContainer.innerHTML = `<div class="error-msg"><i class="fa-solid fa-triangle-exclamation"></i> خطأ: أرقام الجلوس تتكون من 7 أرقام فقط. الرجاء مراجعة الرقم المدخل.</div>`;
                 return;
@@ -158,13 +156,12 @@
             document.getElementById("btnText").style.display = "none";
             document.getElementById("loadingSpinner").style.display = "block";
             document.getElementById("searchBtn").disabled = true;
+            document.getElementById("liveCounter").style.display = "none"; // إخفاء العداد في البداية
             resultsContainer.innerHTML = "";
 
             if (cachedStudentData) {
-                // إذا كانت البيانات محملة مسبقاً، ابحث فيها فوراً بدون رسائل تحميل
-                performFiltering(cachedStudentData, seatVal, nameVal);
+                performFilteringAsync(cachedStudentData, seatVal, nameVal);
             } else {
-                // إظهار رسالة الطمأنة لأن هذا هو التحميل الأول والأطول
                 document.getElementById("loadingStatus").style.display = "block";
                 fetchDataAndSearch(seatVal, nameVal);
             }
@@ -174,23 +171,17 @@
             let resultsContainer = document.getElementById("resultsContainer");
             let fileUrl = "data.csv?v=" + new Date().getTime(); 
 
-            // تم إزالة مؤقت الإعدام (الذي كان يقتل التحميل بسبب بطء الإنترنت)
-            // سنترك الأداة تعمل بحريتها لتحميل الـ 40 ميجا بالكامل
-
             Papa.parse(fileUrl, {
                 download: true,       
                 header: true,         
                 skipEmptyLines: true,
-                worker: true, // محرك الخلفية لمنع تجميد المتصفح
+                worker: true, 
                 transformHeader: function(header) { return header.trim(); },
                 
                 complete: function(results) {
-                    // بمجرد انتهاء التحميل الطويل، نخزن البيانات للأبد
                     cachedStudentData = results.data; 
-                    
-                    // نخفي رسالة الطمأنة ونبدأ الفرز
                     document.getElementById("loadingStatus").style.display = "none";
-                    performFiltering(cachedStudentData, searchSeat, searchName); 
+                    performFilteringAsync(cachedStudentData, searchSeat, searchName); 
                 },
                 error: function(err) {
                     document.getElementById("loadingStatus").style.display = "none";
@@ -202,37 +193,62 @@
             });
         }
 
-        function performFiltering(data, searchSeat, searchName) {
+        // هندسة عبقرية: دالة بحث "غير متزامنة" لكي تتيح للشاشة إظهار العداد الحي بدون تجميد
+        function performFilteringAsync(data, searchSeat, searchName) {
             let foundResults = [];
+            let i = 0;
+            let counterElement = document.getElementById("counterValue");
+            
+            // إظهار العداد
+            document.getElementById("liveCounter").style.display = "block";
 
-            // البحث داخل المخزن
-            for (let i = 0; i < data.length; i++) {
-                let row = data[i];
-                let isMatch = true;
-                
-                if (searchSeat && String(row["seating_no"]).trim() !== searchSeat) {
-                    isMatch = false;
-                }
-                
-                if (searchName) {
-                    let csvName = normalizeArabic(String(row["arabic_name"]));
-                    if (!csvName.includes(searchName)) {
+            // تقسيم عملية البحث إلى دفعات (Chunks) لكي نرى العداد وهو يتحرك
+            function searchChunk() {
+                let chunkSize = 5000; // يفحص 5000 اسم في اللحظة لكي تراه عينك
+                let end = Math.min(i + chunkSize, data.length);
+
+                for (; i < end; i++) {
+                    let row = data[i];
+                    let isMatch = true;
+                    
+                    if (searchSeat && String(row["seating_no"]).trim() !== searchSeat) {
                         isMatch = false;
+                    }
+                    
+                    if (searchName) {
+                        let csvName = normalizeArabic(String(row["arabic_name"]));
+                        if (!csvName.includes(searchName)) {
+                            isMatch = false;
+                        }
+                    }
+
+                    if (isMatch) {
+                        foundResults.push(row);
+                        if (searchSeat && !searchName) {
+                            i = data.length; // إيقاف البحث إذا وجدنا رقم الجلوس
+                            break;
+                        }
                     }
                 }
 
-                if (isMatch) {
-                    foundResults.push(row);
-                    // تسريع فوري: إذا كان البحث بالرقم فقط ووجدناه، أوقف البحث فلا داعي لإكمال الـ 900 ألف
-                    if (searchSeat && !searchName) break;
+                // تحديث العداد الحي على الشاشة
+                counterElement.innerText = i.toLocaleString();
+
+                if (i < data.length) {
+                    // أمر للمتصفح بالتقاط أنفاسه وتحديث الشاشة ثم إكمال الدفعة التالية
+                    requestAnimationFrame(searchChunk);
+                } else {
+                    // الانتهاء من البحث
+                    document.getElementById("liveCounter").style.display = "none";
+                    document.getElementById("btnText").style.display = "inline";
+                    document.getElementById("loadingSpinner").style.display = "none";
+                    document.getElementById("searchBtn").disabled = false;
+                    displayResults(foundResults);
                 }
             }
 
-            document.getElementById("btnText").style.display = "inline";
-            document.getElementById("loadingSpinner").style.display = "none";
-            document.getElementById("searchBtn").disabled = false;
-            
-            displayResults(foundResults);
+            // بدء عملية البحث بالدفعات
+            requestAnimationFrame(searchChunk);
         }
 
         function displayResults(results) {
